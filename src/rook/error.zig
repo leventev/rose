@@ -85,12 +85,17 @@ pub const errno = enum(u16) {
     XDEV = 81,
 };
 
+const longest_enum_field_size = blk: {
+    comptime var len = 0;
+    inline for (@typeInfo(errno).Enum.fields) |field| {
+        if (field.name.len > len) len = field.name.len;
+    }
+    break :blk len;
+};
+
 pub fn panicUnexpectedErrno(err: errno) noreturn {
-    var panic_buf: [64]u8 = undefined;
-    const msg = std.fmt.bufPrint(
-        &panic_buf,
-        "Unexpected errno: {}",
-        .{err},
-    ) catch unreachable;
+    const fmt = "Unexpected errno: {}";
+    var panic_buf: [fmt.len - 2 + longest_enum_field_size]u8 = undefined;
+    const msg = std.fmt.bufPrint(&panic_buf, fmt, .{err}) catch unreachable;
     @panic(msg);
 }
