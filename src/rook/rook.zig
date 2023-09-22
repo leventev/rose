@@ -41,29 +41,21 @@ pub const stdio = struct {
 
 pub const File = struct {
     fd: i32,
-    pub fn read(this: File, buf: []u8) !u32 {
+    pub fn read(this: File, buf: []u8) !usize {
         return rook.read(this.fd, buf);
     }
-    pub fn write(this: File, buf: []const u8) !u32 {
+    pub fn write(this: File, buf: []const u8) !usize {
         return rook.write(this.fd, buf);
     }
     pub fn writeAll(this: File, buf: []const u8) !void {
         return rook.writeAll(this.fd, buf);
     }
 
-    const Reader = std.io.Reader(File, ReadError, struct {
-        fn readFn(this: File, buf: []u8) !usize {
-            return try rook.read(this.fd, buf);
-        }
-    }.readFn);
+    const Reader = std.io.Reader(File, ReadError, File.read);
     pub fn reader(this: File) Reader {
         return .{ .context = this };
     }
-    const Writer = std.io.Writer(File, WriteError, struct {
-        fn writeFn(this: File, buf: []const u8) !usize {
-            return try rook.write(this.fd, buf);
-        }
-    }.writeFn);
+    const Writer = std.io.Writer(File, WriteError, File.write);
     pub fn writer(this: File) Writer {
         return .{ .context = this };
     }
@@ -78,13 +70,13 @@ pub const WriteError = error{
     bad_file_descriptor,
 };
 
-pub fn write(fd: i32, buf: []const u8) WriteError!u32 {
+pub fn write(fd: i32, buf: []const u8) WriteError!usize {
     const bytesWritten: isize = @bitCast(syscall(.write, .{ fd, buf.ptr, buf.len }));
     if (bytesWritten < 0) return switch (@as(errno, @enumFromInt(-bytesWritten))) {
         .BADF => WriteError.bad_file_descriptor,
         else => |e| err.panicUnexpectedErrno(e),
     };
-    return @truncate(@as(usize, @bitCast(bytesWritten)));
+    return @bitCast(bytesWritten);
 }
 
 pub fn exit() noreturn {
@@ -115,13 +107,13 @@ pub const ReadError = error{
     bad_file_descriptor,
 };
 
-pub fn read(fd: i32, buf: []u8) ReadError!u32 {
+pub fn read(fd: i32, buf: []u8) ReadError!usize {
     const bytesRead: isize = @bitCast(syscall(.read, .{ fd, buf.ptr, buf.len }));
     if (bytesRead < 0) return switch (@as(errno, @enumFromInt(-bytesRead))) {
         .BADF => ReadError.bad_file_descriptor,
         else => |e| err.panicUnexpectedErrno(e),
     };
-    return @truncate(@as(usize, @bitCast(bytesRead)));
+    return @bitCast(bytesRead);
 }
 
 pub const MMapError = error{
@@ -148,7 +140,7 @@ pub const MMapFlags = packed struct(i32) {
 
 const FdToPathError = error{BufferTooSmall};
 
-fn fd2path(fd: fd_t, buff: []u8) FdToPathError!usize {
+pub fn fd2path(fd: fd_t, buff: []u8) FdToPathError!usize {
     const bytes_written: isize = @bitCast(syscall(.fd2path, .{ fd, buff.ptr, buff.len }));
     if (bytes_written > -4096 and bytes_written < 0) return switch (@as(errno, @enumFromInt(-bytes_written))) {
         .INVAL => FdToPathError.BufferTooSmall,
