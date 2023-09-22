@@ -1,16 +1,20 @@
+const std = @import("std");
+
 const rook = @import("rook/rook.zig");
 
-pub fn builtin_echo(args: [][]const u8) !void {
-    const writer = rook.io.out.writer();
-    for (args) |arg| {
-        try writer.print("{s} ", .{arg});
+pub fn builtin_echo(args: []const []const u8) !void {
+    var bufwriter = std.io.bufferedWriter(rook.io.out.writer());
+    const writer = bufwriter.writer();
+    if (args.len > 0) {
+        try writer.writeAll(args[0]);
+        for (args[1..]) |arg| try writer.print(" {s}", .{arg});
     }
     try writer.writeByte('\n');
+    try bufwriter.flush();
 }
 
-pub fn builtin_pwd(_: [][]const u8) !void {
-    const cwd = try rook.fd2path_alloc(rook.page_allocator, rook.CWD_FD);
-    errdefer rook.page_allocator.free(cwd);
-    const writer = rook.io.out.writer();
-    try writer.print("{s}\n", .{cwd});
+pub fn builtin_pwd(_: []const []const u8) !void {
+    var buff: [rook.PATH_FULL_MAX]u8 = undefined;
+    const written = try rook.fd2path(rook.CWD_FD, &buff);
+    try builtin_echo(&.{buff[0..written]});
 }
