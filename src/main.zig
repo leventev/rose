@@ -1,6 +1,7 @@
 const std = @import("std");
 const rook = @import("rook/rook.zig");
 const command = @import("command.zig");
+const env = @import("env.zig");
 
 comptime {
     @export(rook._start, .{ .name = "_start" });
@@ -12,7 +13,8 @@ pub fn print_prompt() !void {
     _ = try rook.io.out.write(PROMPT);
 }
 
-pub fn main(args: []const [*:0]const u8, env: [*:null]const ?[*:0]const u8) !void {
+pub fn main(args: []const [*:0]const u8, envp: [*:null]const ?[*:0]const u8) !void {
+    try env.init_env(envp);
     _ = env;
     _ = args;
 

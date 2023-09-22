@@ -2,7 +2,7 @@ const std = @import("std");
 const rook = @import("rook/rook.zig");
 const builtins = @import("builtins.zig");
 
-const builtin_cmd = *const fn (args: [][]const u8) anyerror!void;
+const builtin_cmd = *const fn (args: []const []const u8) anyerror!void;
 const builtin_kv = struct { []const u8, builtin_cmd };
 const builtin_commands = std.ComptimeStringMap(builtin_cmd, [_]builtin_kv{
     .{ "echo", builtins.builtin_echo },
