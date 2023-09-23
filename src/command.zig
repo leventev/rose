@@ -6,6 +6,7 @@ const builtin_cmd = *const fn (args: []const []const u8) anyerror!void;
 const builtin_commands = std.ComptimeStringMap(builtin_cmd, .{
     .{ "echo", builtins.builtin_echo },
     .{ "pwd", builtins.builtin_pwd },
+    .{ "env", builtins.builtin_env },
 });
 
 fn handle_command(args: []const []const u8) !void {
