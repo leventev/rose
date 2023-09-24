@@ -1,9 +1,8 @@
 const std = @import("std");
-
 const rook = @import("rook/rook.zig");
-const env = @import("env.zig");
+const Env = @import("env.zig").Env;
 
-pub fn builtin_echo(args: []const []const u8) !void {
+pub fn builtin_echo(_: *Env, args: []const []const u8) !void {
     var buff_writer = std.io.bufferedWriter(rook.io.out.writer());
     const writer = buff_writer.writer();
 
@@ -16,14 +15,14 @@ pub fn builtin_echo(args: []const []const u8) !void {
     try buff_writer.flush();
 }
 
-pub fn builtin_pwd(_: []const []const u8) !void {
+pub fn builtin_pwd(env: *Env, _: []const []const u8) !void {
     var buff: [rook.PATH_FULL_MAX]u8 = undefined;
     const written = try rook.fd2path(rook.CWD_FD, &buff);
-    try builtin_echo(&.{buff[0..written]});
+    try builtin_echo(env, &.{buff[0..written]});
 }
 
-pub fn builtin_env(_: []const []const u8) !void {
-    var iter = try env.get_env_iterator();
+pub fn builtin_env(env: *Env, _: []const []const u8) !void {
+    var iter = env.get_env_iterator();
 
     var buff_writer = std.io.bufferedWriter(rook.io.out.writer());
     const writer = buff_writer.writer();

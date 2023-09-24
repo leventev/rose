@@ -156,6 +156,24 @@ pub fn fd2path_alloc(allocator: std.mem.Allocator, fd: fd_t) ![]const u8 {
     return allocator.dupe(u8, buff[0..written]);
 }
 
+const OpenError = error{NoSuchFileOrDirectory};
+// TODO: flags, mode
+pub fn open(path: []const u8) !fd_t {
+    const dirfd: isize = if (std.mem.startsWith(u8, path, "/"))
+        -1
+    else
+        CWD_FD;
+
+    // TODO: errors
+    const fd: isize = @bitCast(syscall(.openat, .{ dirfd, path.ptr, path.len, 0, 0 }));
+    if (fd > -4096 and fd < 0) return switch (@as(errno, @enumFromInt(-fd))) {
+        .NOENT => return OpenError.NoSuchFileOrDirectory,
+        else => |e| err.panicUnexpectedErrno(e),
+    };
+
+    return @bitCast(fd);
+}
+
 pub fn mmap(
     addr: ?*anyopaque,
     length: usize,

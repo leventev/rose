@@ -94,8 +94,8 @@ const longest_enum_field_size = blk: {
 };
 
 pub fn panicUnexpectedErrno(err: errno) noreturn {
-    const fmt = "Unexpected errno: {}";
-    var panic_buf: [fmt.len - 2 + longest_enum_field_size]u8 = undefined;
-    const msg = std.fmt.bufPrint(&panic_buf, fmt, .{err}) catch unreachable;
+    const fmt = "Unexpected errno: {s}";
+    var panic_buf: [fmt.len - "{s}".len + longest_enum_field_size]u8 = undefined;
+    const msg = std.fmt.bufPrint(&panic_buf, fmt, .{@tagName(err)}) catch unreachable;
     @panic(msg);
 }

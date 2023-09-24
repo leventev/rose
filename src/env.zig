@@ -5,50 +5,70 @@ const default_envvars = .{
     .{ "PATH", "/bin:/sbin:/usr/bin:/usr/local/bin:/usr/local/sbin" },
 };
 
-var envvars: std.StringHashMap([]const u8) = undefined;
+pub const Env = struct {
+    const EnvvarMap = std.StringArrayHashMapUnmanaged([]const u8);
 
-const EnvPair = struct { key: []const u8, val: []const u8 };
-fn parse_env_var(env: []const u8) ?EnvPair {
-    // the length of an environment variable must be atleast 2
-    // for example "a="
-    if (env.len < 2) return null;
+    allocator: std.mem.Allocator,
+    vars: EnvvarMap,
 
-    const sep_idx = std.mem.indexOf(u8, env, "=") orelse return null;
-    // the key of an env var can't be 0 sized
-    if (sep_idx == 0) return null;
+    pub fn init(allocator: std.mem.Allocator, envp: [*:null]const ?[*:0]const u8) !Env {
+        var vars = EnvvarMap{};
 
-    return EnvPair{
-        .key = env[0..sep_idx],
-        .val = env[sep_idx + 1 .. env.len],
-    };
-}
+        // set default environment variables
+        inline for (default_envvars) |env| {
+            try vars.put(allocator, env[0], env[1]);
+        }
 
-pub fn init_env(envp: [*:null]const ?[*:0]const u8) !void {
-    envvars = std.StringHashMap([]const u8).init(rook.page_allocator);
+        // override or set environment variables
+        var idx: usize = 0;
+        while (envp[idx]) |env| : (idx += 1) {
+            const env_str = std.mem.span(env);
+            var e = parse_env_var(env_str) orelse continue;
 
-    // set default environment variables
-    inline for (default_envvars) |env| {
-        try envvars.put(env[0], env[1]);
+            try vars.put(allocator, e.key, e.val);
+        }
+
+        return .{
+            .vars = vars,
+            .allocator = allocator,
+        };
     }
 
-    // override or set environment variables
-    var idx: usize = 0;
-    while (envp[idx]) |env| : (idx += 1) {
-        const env_str = std.mem.span(env);
-        var e = parse_env_var(env_str) orelse continue;
+    const EnvPair = struct { key: []const u8, val: []const u8 };
+    fn parse_env_var(env: []const u8) ?EnvPair {
+        // the length of an environment variable must be atleast 2
+        // for example "a="
+        if (env.len < 2) return null;
 
-        try envvars.put(e.key, e.val);
+        const sep_idx = std.mem.indexOf(u8, env, "=") orelse return null;
+        // the key of an env var can't be 0 sized
+        if (sep_idx == 0) return null;
+
+        return EnvPair{
+            .key = env[0..sep_idx],
+            .val = env[sep_idx + 1 .. env.len],
+        };
     }
-}
 
-pub fn get_env(key: []const u8) ?[]const u8 {
-    return envvars.get(key);
-}
+    pub fn get_env(self: *Env, key: []const u8) ?[]const u8 {
+        return self.vars.get(key);
+    }
 
-pub fn set_env(key: []const u8, val: []const u8) !void {
-    envvars.put(key, val);
-}
+    pub const SetEnvError = ParsePathVarError || std.mem.Allocator.Error;
+    pub fn set_env(self: *Env, key: []const u8, val: []const u8) SetEnvError!void {
+        if (std.mem.eql(u8, key, "PATH")) {
+            try parse_path_var();
+        }
 
-pub fn get_env_iterator() !std.StringHashMap([]const u8).Iterator {
-    return envvars.iterator();
-}
+        self.vars.put(key, val);
+    }
+
+    pub fn get_env_iterator(self: *Env) EnvvarMap.Iterator {
+        return self.vars.iterator();
+    }
+
+    pub const ParsePathVarError = error{IllegalPathValue};
+    fn parse_path_var(path: []const u8) ParsePathVarError!void {
+        _ = path;
+    }
+};
