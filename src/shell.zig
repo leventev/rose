@@ -11,8 +11,8 @@ const builtin_commands = std.ComptimeStringMap(builtin_cmd, .{
 });
 
 pub const Shell = struct {
-    allocator: std.mem.Allocator = undefined,
-    env: Env = undefined,
+    allocator: std.mem.Allocator,
+    env: Env,
 
     pub fn init(allocator: std.mem.Allocator, envp: [*:null]const ?[*:0]const u8) !Shell {
         return .{
