@@ -17,5 +17,5 @@ pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_
 pub fn main(args: []const [*:0]const u8, envp: [*:null]const ?[*:0]const u8) !void {
     _ = args;
     var shell = try Shell.init(rook.page_allocator, envp);
-    shell.read_loop();
+    shell.readLoop();
 }

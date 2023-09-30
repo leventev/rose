@@ -5,12 +5,14 @@ const Env = @import("env.zig").Env;
 
 const builtin_cmd = *const fn (env: *Env, args: []const []const u8) anyerror!void;
 const builtin_commands = std.ComptimeStringMap(builtin_cmd, .{
-    .{ "echo", builtins.builtin_echo },
-    .{ "pwd", builtins.builtin_pwd },
-    .{ "env", builtins.builtin_env },
+    .{ "echo", builtins.builtinEcho },
+    .{ "pwd", builtins.builtinPwd },
+    .{ "env", builtins.builtinEnv },
 });
 
 pub const Shell = struct {
+    const Self = @This();
+
     allocator: std.mem.Allocator,
     env: Env,
 
@@ -21,41 +23,54 @@ pub const Shell = struct {
         };
     }
 
-    fn handle_command(self: *Shell, args: []const []const u8) void {
+    fn handleCommand(self: *Self, args: []const []const u8) void {
         const command = args[0];
         const rest = args[1..];
 
         if (builtin_commands.get(command)) |cmd| {
             cmd(&self.env, rest) catch @panic("Builtin failed");
         } else {
-            self.handle_external(command, rest) catch |err| {
+            self.handleExternal(command, rest) catch |err| {
                 const writer = rook.io.out.writer();
                 writer.print("rose: {s}: command not found: {s}\n", .{ command, @errorName(err) }) catch {};
             };
         }
     }
 
-    fn handle_line(self: *Shell, line: []const u8) void {
-        const args = self.parse_line(line) catch @panic("Failed to parse line");
+    fn handleLine(self: *Self, line: []const u8) void {
+        const args = self.parseLine(line) catch @panic("Failed to parse line");
         defer args.deinit();
 
-        self.handle_command(args.items);
+        self.handleCommand(args.items);
     }
 
-    fn parse_line(self: *Shell, line: []const u8) !std.ArrayList([]const u8) {
+    fn parseLine(self: *Self, line: []const u8) !std.ArrayList([]const u8) {
         var iter = std.mem.tokenizeScalar(u8, line, ' ');
         var args = std.ArrayList([]const u8).init(self.allocator);
         errdefer args.deinit();
-        while (iter.next()) |part| try args.append(part);
+
+        while (iter.next()) |part| {
+            if (std.mem.indexOfScalar(u8, part, '$')) |start_idx| {
+                const end = part.len;
+                const val = if (end == start_idx + 1)
+                    "$"
+                else
+                    self.env.getEnv(part[start_idx + 1 .. end]) orelse "";
+                try args.append(val);
+            } else {
+                try args.append(part);
+            }
+        }
+
         return args;
     }
 
-    fn find_exec(self: *Shell, name: []const u8) void {
+    fn findExec(self: *Self, name: []const u8) void {
         _ = self;
         _ = name;
     }
 
-    fn handle_external(self: *Shell, cmd: []const u8, args: []const []const u8) !void {
+    fn handleExternal(self: *Self, cmd: []const u8, args: []const []const u8) !void {
         _ = self;
         _ = args;
         if (std.mem.startsWith(u8, cmd, "/")) {
@@ -66,22 +81,22 @@ pub const Shell = struct {
 
     const PROMPT: []const u8 = "$ ";
 
-    fn print_prompt() !void {
+    fn printPompt() !void {
         _ = try rook.io.out.writeAll(PROMPT);
     }
 
     const MAX_LINE_LEN = 4096;
 
-    pub fn read_loop(self: *Shell) noreturn {
+    pub fn readLoop(self: *Self) noreturn {
         var line_buff: [MAX_LINE_LEN]u8 = undefined;
         var buff_stream = std.io.fixedBufferStream(&line_buff);
 
         const stdin_reader = rook.io.in.reader();
         while (true) : (buff_stream.reset()) {
-            print_prompt() catch {};
+            printPompt() catch {};
             stdin_reader.streamUntilDelimiter(buff_stream.writer(), '\n', MAX_LINE_LEN) catch @panic("Failed to read line from stdin");
             if (buff_stream.getPos() catch unreachable == 0) continue;
-            self.handle_line(buff_stream.getWritten());
+            self.handleLine(buff_stream.getWritten());
         }
     }
 };

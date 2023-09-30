@@ -9,7 +9,7 @@ const default_envvars = .{
 };
 
 const ParsePathVarError = error{IllegalPathValue} || std.mem.Allocator.Error;
-fn parse_path_var(allocator: std.mem.Allocator, path: []const u8) ParsePathVarError!std.ArrayListUnmanaged([]const u8) {
+fn parsePathVar(allocator: std.mem.Allocator, path: []const u8) ParsePathVarError!std.ArrayListUnmanaged([]const u8) {
     var new_path = std.ArrayListUnmanaged([]const u8){};
     errdefer {
         for (new_path.items) |str| {
@@ -29,7 +29,7 @@ fn parse_path_var(allocator: std.mem.Allocator, path: []const u8) ParsePathVarEr
 }
 
 const EnvPair = struct { key: []const u8, val: []const u8 };
-fn parse_env_var(env: []const u8) ?EnvPair {
+fn parseEnvVar(env: []const u8) ?EnvPair {
     // the length of an environment variable must be atleast 2
     // for example "a="
     if (env.len < 2) return null;
@@ -59,15 +59,15 @@ pub const Env = struct {
 
         // set default environment variables
         inline for (default_envvars) |envvar| {
-            try env.set_env(allocator, envvar[0], envvar[1]);
+            try env.setEnv(allocator, envvar[0], envvar[1]);
         }
 
         // override or set environment variables
         var idx: usize = 0;
         while (envp[idx]) |envvar| : (idx += 1) {
             const env_str = std.mem.span(envvar);
-            const e = parse_env_var(env_str) orelse continue;
-            try env.set_env(allocator, e.key, e.val);
+            const e = parseEnvVar(env_str) orelse continue;
+            try env.setEnv(allocator, e.key, e.val);
         }
 
         // make sure $PATH is set
@@ -76,14 +76,14 @@ pub const Env = struct {
         return env;
     }
 
-    pub fn get_env(self: *Env, key: []const u8) ?[]const u8 {
+    pub fn getEnv(self: *Env, key: []const u8) ?[]const u8 {
         return self.vars.get(key);
     }
 
     pub const SetEnvError = ParsePathVarError || std.mem.Allocator.Error;
-    pub fn set_env(self: *Self, allocator: std.mem.Allocator, key: []const u8, val: []const u8) SetEnvError!void {
+    pub fn setEnv(self: *Self, allocator: std.mem.Allocator, key: []const u8, val: []const u8) SetEnvError!void {
         if (std.mem.eql(u8, key, "PATH")) {
-            const new_path = try parse_path_var(allocator, val);
+            const new_path = try parsePathVar(allocator, val);
             for (self.path.items) |str| {
                 allocator.free(str);
             }
@@ -98,7 +98,7 @@ pub const Env = struct {
         try self.vars.put(allocator, key_copied, val_copied);
     }
 
-    pub fn get_env_iterator(self: *Self) EnvvarMap.Iterator {
+    pub fn getEnvIterator(self: *Self) EnvvarMap.Iterator {
         return self.vars.iterator();
     }
 };
