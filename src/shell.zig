@@ -40,29 +40,57 @@ pub const Shell = struct {
     fn handleLine(self: *Self, line: []const u8) void {
         const args = self.parseLine(line) catch @panic("Failed to parse line");
         defer args.deinit();
+        defer for (args.items) |arg| self.allocator.free(arg);
 
         self.handleCommand(args.items);
     }
 
-    fn parseLine(self: *Self, line: []const u8) !std.ArrayList([]const u8) {
-        var iter = std.mem.tokenizeScalar(u8, line, ' ');
-        var args = std.ArrayList([]const u8).init(self.allocator);
-        errdefer args.deinit();
+    fn expandArgument(self: *Self, arg: []const u8) std.mem.Allocator.Error![]const u8 {
+        var str = std.ArrayList(u8).init(self.allocator);
 
-        while (iter.next()) |part| {
-            if (std.mem.indexOfScalar(u8, part, '$')) |start_idx| {
-                const end = part.len;
-                const val = if (end == start_idx + 1)
-                    "$"
-                else
-                    self.env.getEnv(part[start_idx + 1 .. end]) orelse "";
-                try args.append(val);
+        var index: usize = 0;
+        while (index < arg.len) : (index += 1) {
+            const ch = arg[index];
+            // if we find a $ it means we are trying to look up a variable
+            if (ch == '$') {
+                // find the end of the key, usually a whitespace, slash, dot, etc...
+                const key_end = findNextNonAlphanumeric(arg, index + 1) orelse arg.len;
+
+                if (key_end == index + 1) {
+                    // if the key's length is 0 just write a $
+                    try str.appendSlice("$");
+                } else {
+                    const key = arg[index + 1 .. key_end];
+                    index += key.len;
+
+                    // if the environment variable does not exist write nothing
+                    const val = self.env.getEnv(key) orelse continue;
+                    try str.appendSlice(val);
+                }
             } else {
-                try args.append(part);
+                // if the character is not a part of any env variable lookup
+                // then append it to the string
+                try str.append(ch);
             }
         }
 
+        return str.toOwnedSlice();
+    }
+
+    fn expandArguments(self: *Self, iter: *std.mem.TokenIterator(u8, .scalar)) std.mem.Allocator.Error!std.ArrayList([]const u8) {
+        var args = std.ArrayList([]const u8).init(self.allocator);
+
+        while (iter.next()) |part| {
+            const val = try self.expandArgument(part);
+            try args.append(val);
+        }
+
         return args;
+    }
+
+    fn parseLine(self: *Self, line: []const u8) std.mem.Allocator.Error!std.ArrayList([]const u8) {
+        var iter = std.mem.tokenizeScalar(u8, line, ' ');
+        return self.expandArguments(&iter);
     }
 
     fn findExec(self: *Self, name: []const u8) void {
@@ -77,12 +105,6 @@ pub const Shell = struct {
             const fd = try rook.open(cmd);
             try rook.io.out.writer().print("opened {}\n", .{fd});
         }
-    }
-
-    const PROMPT: []const u8 = "$ ";
-
-    fn printPompt() !void {
-        _ = try rook.io.out.writeAll(PROMPT);
     }
 
     const MAX_LINE_LEN = 4096;
@@ -100,3 +122,17 @@ pub const Shell = struct {
         }
     }
 };
+
+const PROMPT: []const u8 = "$ ";
+
+fn printPompt() !void {
+    _ = try rook.io.out.writeAll(PROMPT);
+}
+
+fn findNextNonAlphanumeric(str: []const u8, start_idx: usize) ?usize {
+    var i = start_idx;
+    while (i < str.len) : (i += 1)
+        if (!std.ascii.isAlphanumeric(str[i])) return i;
+
+    return null;
+}

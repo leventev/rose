@@ -45,7 +45,7 @@ fn parseEnvVar(env: []const u8) ?EnvPair {
 }
 
 pub const Env = struct {
-    const Self = Env;
+    const Self = @This();
     const EnvvarMap = std.StringArrayHashMapUnmanaged([]const u8);
 
     vars: EnvvarMap,
